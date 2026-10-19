@@ -239,12 +239,12 @@ details.close[open] summary::before{content:"− "}
 </div>
 
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script>
 /* ---- Fill these two in from Supabase: Project Settings -> API ---- */
-const SUPABASE_URL = "https://xfrcsaadxjslsmoygwcv.supabase.co/rest/v1/";
-const SUPABASE_ANON_KEY = "sb_publishable_Nwpwwf7lD-uEcmoS8tdhGw_u1Wj4tpI";
-/* The anon key is safe to publish: row-level security in schema.sql keeps every row private to your login. */
+const SUPABASE_URL = "https://xfrcsaadxjslsmoygwcv.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmcmNzYWFkeGpzbHNtb3lnd2N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzNjUxMjMsImV4cCI6MjEwNzk0MTEyM30.zReoA-3znX-FdEwguYVy6UyQQ6kYx3sJZGpdghrWiA0";
+/* Use the Publishable key (sb_publishable_...) or the legacy anon key, never a secret/service_role key. It is safe to publish: row-level security in schema.sql keeps every row private to your login. */
 
 const ACCTS = {flex:"Chase Freedom Flex", discover:"Discover it Student", amex:"Amex Blue Cash", debit:"Chase debit", savings:"Chase savings", direct:"Straight from paycheck", cash:"From Chase savings"};
 const CARD_USE = {flex:"Groceries & dining", discover:"Bills & subscriptions", amex:"Shopping & everything else"};
@@ -281,7 +281,7 @@ async function load(){
     if (!cfg) $("envs").innerHTML = `<p class="empty">No budget found for this login. Run seed.sql in Supabase (see the README), then reload.</p>`;
     fillSelects(); render();
   } catch(e){
-    $("status").textContent = "Couldn't load your ledger. Check your connection and reload.";
+    $("status").textContent = "Couldn't load your ledger: " + explain(e);
   } finally { loading = false; }
 }
 async function addTxn(row){
@@ -289,15 +289,25 @@ async function addTxn(row){
 }
 
 /* ---------- sign in ---------- */
+function explain(err){
+  const m = String((err && (err.message || err.error_description)) || err || "");
+  if (/invalid login credentials/i.test(m)) return "Email or password is wrong. Check both, or reset the password in Supabase (Authentication → Users).";
+  if (/email not confirmed/i.test(m)) return "This login isn't confirmed yet. In Supabase: Authentication → Users → your user → Confirm email.";
+  if (/invalid api key|no api key|apikey/i.test(m)) return "Supabase rejected the key in index.html. Copy the Publishable key again from Project Settings → API Keys.";
+  if (/failed to fetch|networkerror|load failed/i.test(m)) return "Can't reach Supabase. Check the Project URL in index.html, and that the project isn't paused.";
+  if (/permission denied/i.test(m)) return "Signed in, but the tables refuse access. Run fix.sql in the Supabase SQL Editor.";
+  return m || "Something went wrong. Try again.";
+}
 function showApp(on){ $("app").hidden = !on; $("auth").hidden = on; }
 $("auth-form").addEventListener("submit", async ev => {
   ev.preventDefault();
   const email = $("a-email").value.trim(), password = $("a-pass").value;
   if (!email || !password){ $("a-status").textContent = "Enter your email and password."; return; }
   $("a-go").disabled = true; $("a-status").textContent = "Signing in…";
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+  let error = null;
+  try { ({ error } = await sb.auth.signInWithPassword({ email, password })); } catch(e){ error = e; }
   $("a-go").disabled = false;
-  $("a-status").textContent = error ? "That email and password don't match. Try again." : "";
+  $("a-status").textContent = error ? explain(error) : "";
   if (!error) $("a-pass").value = "";
 });
 $("signout").addEventListener("click", async () => { await sb.auth.signOut(); });
