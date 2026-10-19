@@ -122,6 +122,22 @@ details.close[open] summary::before{content:"− "}
 .auth form{display:grid;grid-template-columns:1fr;gap:12px;width:min(380px,100%);background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:24px}
 .auth h1{font-size:1.8rem}
 .auth p{margin:0;color:var(--muted);font-size:.88rem}
+.dash{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,1fr);gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+.tile{scroll-snap-align:start;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:8px;align-content:start;min-width:0}
+.tile h3{margin:0;font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tile .main{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:1.45rem;font-weight:600;line-height:1.1}
+.tile .main small{font-size:.78rem;font-weight:500;color:var(--muted);font-family:var(--f-body)}
+.tile .ln{display:flex;justify-content:space-between;gap:8px;font-size:.86rem}
+.tile .ln b{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:600}
+.tile .chip{justify-self:start;font-size:.76rem;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.tile .chip.warn{background:var(--warn-soft);color:var(--warn)}
+.tile .chip.bad{background:var(--bad-soft);color:var(--bad)}
+.tile .add{margin-top:2px;padding:6px 10px;font-size:.84rem}
+.tile.pay{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tile.pay h3,.tile.pay .main small{color:inherit;opacity:.75}
+.tile.save{background:var(--accent-soft);border-color:transparent}
+.tile.save .main{color:var(--accent)}
+.tile.over{border-color:var(--bad)}
 .head-r{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 </style>
 </head>
@@ -146,6 +162,8 @@ details.close[open] summary::before{content:"− "}
     </div>
     <div class="head-r"><div class="period" id="period"></div><button class="ghost" type="button" id="signout">Sign out</button></div>
   </header>
+
+  <section class="dash" id="dash" aria-label="This pay period at a glance"></section>
 
   <section class="fund" aria-label="India fund">
     <div style="display:grid;gap:2px"><span class="eyebrow" style="color:inherit;opacity:.75">India loan fund, saved so far</span><span class="big num" id="fund">$0.00</span></div>
@@ -240,10 +258,11 @@ details.close[open] summary::before{content:"− "}
 
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
 <script>
-/* ---- Fill these two in from Supabase: Project Settings -> API ---- */
-const SUPABASE_URL = "https://xfrcsaadxjslsmoygwcv.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmcmNzYWFkeGpzbHNtb3lnd2N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzNjUxMjMsImV4cCI6MjEwNzk0MTEyM30.zReoA-3znX-FdEwguYVy6UyQQ6kYx3sJZGpdghrWiA0";
+/* ---- Your Supabase URL and key live in config.js, next to this file ---- */
+const SUPABASE_URL = (window.LEDGER_CONFIG || {}).url || "https://YOUR-PROJECT-REF.supabase.co";
+const SUPABASE_ANON_KEY = (window.LEDGER_CONFIG || {}).key || "YOUR-PUBLISHABLE-OR-ANON-KEY";
 /* Use the Publishable key (sb_publishable_...) or the legacy anon key, never a secret/service_role key. It is safe to publish: row-level security in schema.sql keeps every row private to your login. */
 
 const ACCTS = {flex:"Chase Freedom Flex", discover:"Discover it Student", amex:"Amex Blue Cash", debit:"Chase debit", savings:"Chase savings", direct:"Straight from paycheck", cash:"From Chase savings"};
@@ -371,6 +390,71 @@ function compute(){
   return {owed, cash: round(cash), spent, left: round(left), owedTotal, extra: round(cash - owedTotal - left), saved: round(saved), budget: round(budget), spentTotal: round(spentTotal)};
 }
 
+/* ---------- dashboard ---------- */
+const GROUPS = [
+  {title:"Rent", ids:["rent"], cat:"rent", rent:true},
+  {title:"Groceries & food", ids:["food"], cat:"food"},
+  {title:"Personal", ids:["personal"], cat:"personal"},
+  {title:"Small bills", ids:["electric","internet","phone","subs"], cat:"electric", bills:true},
+  {title:"Trip", ids:["trip"], cat:"trip"},
+  {title:"Surprises & other", ids:["buffer","other"], cat:"buffer"},
+];
+function renderDash(r){
+  const envIds = cfg.envelopes.map(e => e.id);
+  const known = new Set(GROUPS.flatMap(g => g.ids));
+  const extraIds = envIds.filter(id => !known.has(id));
+  const budgetOf = id => (cfg.envelopes.find(e => e.id === id) || {}).budget || 0;
+  const pay = Number(cfg.paycheck) || 0;
+  const goal = Number(cfg.saveGoal ?? cfg.paycheck) || 0;
+  const tiles = [];
+  tiles.push(`<div class="tile pay"><h3>Paycheck this period</h3><div class="main">${money(pay)}</div>
+    <div class="ln"><span>Planned to spend</span><b>${money(r.budget)}</b></div>
+    <div class="ln"><span>Spent so far</span><b>${money(r.spentTotal)}</b></div>
+    <div class="ln"><span>Still left to spend</span><b>${money(r.left)}</b></div></div>`);
+  for (const g of GROUPS){
+    const ids = g.cat === "buffer" ? [...g.ids, ...extraIds] : g.ids;
+    const has = ids.some(id => envIds.includes(id)) || ids.some(id => r.spent[id]);
+    if (!has) continue;
+    const planned = round(ids.reduce((s,id)=>s+budgetOf(id),0));
+    const spent = round(ids.reduce((s,id)=>s+(r.spent[id]||0),0));
+    const left = round(planned - spent);
+    const cat = ids.find(id => envIds.includes(id)) || g.cat;
+    let chip, body;
+    if (g.rent){
+      const done = planned > 0 && spent >= planned - 0.01;
+      chip = done ? `<span class="chip">Paid</span>` : `<span class="chip warn">Not paid yet</span>`;
+      body = `<div class="ln"><span>Set aside</span><b>${money(planned)}</b></div><div class="ln"><span>Paid</span><b>${money(spent)}</b></div>`;
+    } else {
+      chip = left < 0 ? `<span class="chip bad">${money(-left)} over</span>` : (planned && spent/planned >= .85) ? `<span class="chip warn">Almost used up</span>` : `<span class="chip">On track</span>`;
+      body = `<div class="ln"><span>Budget</span><b>${money(planned)}</b></div><div class="ln"><span>Spent</span><b>${money(spent)}</b></div>`;
+      if (g.bills){
+        const paidCount = ids.filter(id => envIds.includes(id) && (r.spent[id]||0) >= budgetOf(id) - 0.01 && budgetOf(id) > 0).length;
+        const total = ids.filter(id => envIds.includes(id)).length;
+        body += `<div class="ln"><span>Bills paid</span><b>${paidCount} of ${total}</b></div>`;
+      }
+    }
+    const main = g.rent ? money(planned) + " <small>rent</small>" : money(Math.max(0,left)) + " <small>left</small>";
+    tiles.push(`<div class="tile${left < 0 ? " over" : ""}"><h3>${esc(g.title)}</h3><div class="main">${main}</div>${body}${chip}<button class="add" type="button" data-cat="${esc(cat)}">+ Add ${g.rent ? "rent payment" : "expense"}</button></div>`);
+  }
+  const toGo = round(Math.max(0, goal - r.saved));
+  tiles.push(`<div class="tile save"><h3>Savings</h3><div class="main">${money(r.saved)} <small>saved</small></div>
+    <div class="ln"><span>Goal (${esc((cfg.period||{}).next || "2nd")} paycheck)</span><b>${money(goal)}</b></div>
+    <div class="ln"><span>Still to save</span><b>${money(toGo)}</b></div>
+    <div class="ln"><span>Bonus if you stay on budget</span><b>${money(Math.max(0, r.extra))}</b></div>
+    <button class="add" type="button" data-kind="save">+ Add savings</button></div>`);
+  $("dash").innerHTML = tiles.join("");
+}
+$("dash").addEventListener("click", ev => {
+  const b = ev.target.closest("button.add"); if (!b) return;
+  const k = b.dataset.kind || "spend";
+  const seg = document.querySelector(`.seg button[data-kind="${k}"]`);
+  if (seg) seg.click();
+  if (k === "spend" && b.dataset.cat){ $("f-cat").value = b.dataset.cat; $("f-acct").value = suggest(b.dataset.cat); showHint(); }
+  if (k === "save" && cfg){ $("f-desc").value = `${(cfg.period||{}).next || ""} paycheck to India fund`.trim(); $("f-amt").value = (Number(cfg.saveGoal ?? cfg.paycheck) || "") ; }
+  $("form").scrollIntoView({behavior: (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) ? "auto" : "smooth", block: "center"});
+  setTimeout(() => (k === "save" ? $("f-amt") : $("f-desc")).focus({preventScroll:true}), 300);
+});
+
 /* ---------- render ---------- */
 function render(){
   const saves = all.filter(t => t.kind === "save");
@@ -380,6 +464,7 @@ function render(){
   if (!cfg) return;
   const r = compute();
   const p = cfg.period || {};
+  renderDash(r);
   $("period").innerHTML = `<span class="pill">Bills paycheck · ${esc(p.label||"")}</span><span class="pill save">Next: ${esc(p.next||"")} → save it all</span>`;
   $("s-cash").textContent = money(r.cash);
   $("s-owed").textContent = money(r.owedTotal);
@@ -476,7 +561,7 @@ $("n-go").addEventListener("click", async () => {
   };
   const nextCfg = {
     asOf: start, checking: r.cash, savings: 0, cards: r.owed, due: cfg.due || {}, oldCardDebt: r.owedTotal,
-    paycheck: isFinite(pay) ? round(pay) : (cfg.paycheck || 0), envelopes,
+    paycheck: isFinite(pay) ? round(pay) : (cfg.paycheck || 0), saveGoal: isFinite(pay) ? round(pay) : (cfg.saveGoal ?? cfg.paycheck ?? 0), envelopes,
     period: {id: start, start, end, label: `${fmt(start)} – ${fmt(end)}`, next: next ? fmt(next) : ""}
   };
   try {
@@ -504,7 +589,7 @@ $("csv").addEventListener("click", () => {
 fillSelects();
 (async () => {
   if (!window.supabase || SUPABASE_URL.includes("YOUR-PROJECT-REF")){
-    $("a-status").textContent = "Setup isn't finished: add your Supabase URL and anon key near the bottom of index.html.";
+    $("a-status").textContent = "Setup isn't finished: put your Supabase URL and key in config.js.";
     $("a-go").disabled = true; showApp(false); return;
   }
   sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {auth:{persistSession:true, autoRefreshToken:true}});
