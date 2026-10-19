@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="theme-color" content="#0B6B4D">
+<title>Paycheck Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+img{max-width:100%}
+/* Layout: a bank passbook — summary strip, then envelopes and cards side by side, the entry log, then closed pay periods. */
+:root{
+  --bg:#EEF2F0; --paper:#FBFCFB; --ink:#16201D; --muted:#5B6B66; --line:#D3DCD8;
+  --accent:#0B6B4D; --accent-soft:#DCEDE6; --warn:#A8581A; --warn-soft:#F6E6D7; --bad:#B23A36; --bad-soft:#F7DEDD;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --f-num:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1513; --paper:#161E1B; --ink:#E3ECE8; --muted:#94A5A0; --line:#2A3632;
+  --accent:#4CC79A; --accent-soft:#173328; --warn:#E39A5B; --warn-soft:#3A2717; --bad:#EF7C77; --bad-soft:#3B1C1B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1513; --paper:#161E1B; --ink:#E3ECE8; --muted:#94A5A0; --line:#2A3632;
+  --accent:#4CC79A; --accent-soft:#173328; --warn:#E39A5B; --warn-soft:#3A2717; --bad:#EF7C77; --bad-soft:#3B1C1B; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.1}
+h2{font-size:1.15rem}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:12px}
+.period{display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:var(--paper)}
+.pill.save{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);background:var(--paper);border-radius:12px;overflow:hidden}
+.strip>div{padding:16px 18px;display:grid;gap:4px;border-right:1px solid var(--line);min-width:0}
+.strip>div:last-child{border-right:0;background:var(--accent-soft)}
+.strip .big{font-size:1.45rem;font-weight:600}
+.strip .sub{font-size:.8rem;color:var(--muted)}
+.strip>div:last-child .big{color:var(--accent)}
+.fund{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 18px;padding:14px 18px;border-radius:12px;background:var(--ink);color:var(--paper)}
+.fund .big{font-family:var(--f-display);font-size:1.6rem;font-weight:700}
+.fund .sub{font-size:.85rem;opacity:.8}
+.cols{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.panel-head .note{font-size:.8rem;color:var(--muted)}
+.env{display:grid;gap:12px}
+.env-row{display:grid;gap:5px}
+.env-top{display:flex;justify-content:space-between;gap:10px;font-size:.92rem}
+.env-top .name{font-weight:600;min-width:0}
+.env-top .fig{color:var(--muted);white-space:nowrap}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.env-row.near .bar i{background:var(--warn)}
+.env-row.over .bar i{background:var(--bad)}
+.env-row.over .fig{color:var(--bad);font-weight:600}
+.cards{display:grid;gap:10px}
+.card{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 14px;border:1px solid var(--line);border-radius:10px}
+.card .cname{font-weight:600}
+.card .owed{font-size:1.15rem;font-weight:600;text-align:right}
+.card .use{grid-column:1/-1;font-size:.82rem;color:var(--muted)}
+.card .meta{font-size:.78rem;color:var(--muted);text-align:right}
+.reserve{display:flex;justify-content:space-between;font-size:.88rem;padding-top:10px;border-top:1px dashed var(--line);gap:10px}
+.guide{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.rule{padding:12px 14px;border-radius:10px;background:var(--bg);display:grid;gap:4px;align-content:start}
+.rule b{font-size:.92rem}
+.rule span{font-size:.84rem;color:var(--muted)}
+.rule .rate{font-family:var(--f-num);font-size:.78rem;color:var(--accent);font-weight:600}
+.alert{padding:10px 14px;border-radius:10px;background:var(--warn-soft);color:var(--ink);font-size:.88rem}
+.alert b{color:var(--warn)}
+form{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:end}
+label{display:grid;gap:4px;font-size:.78rem;font-weight:600;color:var(--muted)}
+input,select,button{font:inherit;font-size:.92rem;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.f-desc{grid-column:span 2}
+button{cursor:pointer;font-weight:600}
+button:disabled{opacity:.55;cursor:default}
+button.primary{background:var(--accent);color:var(--paper);border-color:var(--accent)}
+button.ghost{width:auto;padding:6px 12px}
+.seg{display:flex;gap:6px;grid-column:1/-1;flex-wrap:wrap}
+.seg button{width:auto;padding:6px 12px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.hint{grid-column:1/-1;font-size:.84rem;color:var(--accent);min-height:1.2em;margin:0}
+.log-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:620px}
+th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.amt,th.amt{text-align:right;white-space:nowrap}
+.tag{font-size:.74rem;padding:2px 8px;border-radius:999px;background:var(--bg);white-space:nowrap}
+.tag.payment,.tag.income,.tag.save{background:var(--accent-soft);color:var(--accent)}
+.del{width:auto;padding:3px 9px;font-size:.78rem;font-weight:500;color:var(--muted)}
+.del.arm{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.empty{color:var(--muted);font-size:.9rem;padding:14px 0;margin:0}
+.status{font-size:.82rem;color:var(--muted)}
+details.close{border-top:1px dashed var(--line);padding-top:12px}
+details.close summary{cursor:pointer;font-weight:600;color:var(--accent);list-style:none}
+details.close summary::-webkit-details-marker{display:none}
+details.close summary::before{content:"+ "}
+details.close[open] summary::before{content:"− "}
+.close-body{display:grid;gap:14px;padding-top:12px}
+.close-body p{margin:0;font-size:.88rem;color:var(--muted);max-width:68ch}
+.grid3{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.bud{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.hist td.lbl{font-weight:600}
+.hist tr.open td{background:var(--bg)}
+.hist .det td{font-size:.82rem;color:var(--muted)}
+@media (max-width:860px){.cols{grid-template-columns:1fr}.guide{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:repeat(2,minmax(0,1fr))}.f-desc{grid-column:1/-1}.grid3,.bud{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.strip{grid-template-columns:1fr 1fr}.strip>div:nth-child(2){border-right:0}.strip>div:nth-child(-n+2){border-bottom:1px solid var(--line)}.guide{grid-template-columns:1fr}}
+.auth{min-height:100vh;display:grid;place-items:center;padding-block:32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.auth form{display:grid;grid-template-columns:1fr;gap:12px;width:min(380px,100%);background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:24px}
+.auth h1{font-size:1.8rem}
+.auth p{margin:0;color:var(--muted);font-size:.88rem}
+.head-r{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body>
+<section class="auth" id="auth">
+  <form id="auth-form" novalidate>
+    <span class="eyebrow">Private ledger</span>
+    <h1>Paycheck Ledger</h1>
+    <p>Sign in once on each device. You stay signed in after that.</p>
+    <label>Email<input id="a-email" type="email" autocomplete="username" required></label>
+    <label>Password<input id="a-pass" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit" id="a-go">Sign in</button>
+    <p class="status" id="a-status" role="status"></p>
+  </form>
+</section>
+<div id="app" hidden>
+<div class="wrap">
+  <header class="head">
+    <div style="display:grid;gap:6px">
+      <span class="eyebrow">Rebanta's money, one pay period at a time</span>
+      <h1>Paycheck Ledger</h1>
+    </div>
+    <div class="head-r"><div class="period" id="period"></div><button class="ghost" type="button" id="signout">Sign out</button></div>
+  </header>
+
+  <section class="fund" aria-label="India fund">
+    <div style="display:grid;gap:2px"><span class="eyebrow" style="color:inherit;opacity:.75">India loan fund, saved so far</span><span class="big num" id="fund">$0.00</span></div>
+    <span class="sub" id="fund-sub">Log each saved paycheck as “I saved money”.</span>
+  </section>
+
+  <section class="strip" aria-label="Summary">
+    <div><span class="eyebrow">Cash now</span><span class="big num" id="s-cash">—</span><span class="sub">Chase checking + savings</span></div>
+    <div><span class="eyebrow">Owed on cards</span><span class="big num" id="s-owed">—</span><span class="sub">Pay every statement in full</span></div>
+    <div><span class="eyebrow">Left in budgets</span><span class="big num" id="s-left">—</span><span class="sub">Still planned this period</span></div>
+    <div><span class="eyebrow">Extra to save</span><span class="big num" id="s-extra">—</span><span class="sub">Move to the fund at period end</span></div>
+  </section>
+
+  <section class="panel" aria-labelledby="g-h">
+    <div class="panel-head"><h2 id="g-h">Which card for what</h2><span class="note">Oct–Dec 2026 bonus categories</span></div>
+    <div class="guide">
+      <div class="rule"><span class="rate">5% grocery · 7% dining</span><b>Chase Freedom Flex</b><span>Grocery stores, restaurants, milkshakes, coffee. Not Walmart or Target. Bonus capped at $1,500 combined.</span></div>
+      <div class="rule"><span class="rate">5% utilities · entertainment</span><b>Discover it Student</b><span>Duke Energy, AT&amp;T, Boost, Claude, Apple, Hack The Box. Skip any biller that adds a card fee.</span></div>
+      <div class="rule"><span class="rate">3% online · 1% else</span><b>Amex Blue Cash Everyday</b><span>Online shopping, bus tickets, Ross, Dollar Tree, Walmart and Target, everything else.</span></div>
+      <div class="rule"><span class="rate">no fees</span><b>Chase debit</b><span>Rent through the resident portal, haircuts, and anything cash-only.</span></div>
+    </div>
+    <div class="alert"><b>Activate both 5% bonuses now.</b> Chase Freedom Flex by Dec 14 and Discover by Dec 31. No activation, no bonus. Set every card's autopay to the full statement balance from checking.</div>
+  </section>
+
+  <div class="cols">
+    <section class="panel" aria-labelledby="e-h">
+      <div class="panel-head"><h2 id="e-h">Budgets this period</h2><span class="note" id="e-note"></span></div>
+      <div class="env" id="envs"><p class="empty">Loading your budgets…</p></div>
+      <div class="reserve"><span>Card balances carried in from before this period</span><span class="num" id="old-debt">—</span></div>
+    </section>
+
+    <section class="panel" aria-labelledby="c-h">
+      <div class="panel-head"><h2 id="c-h">Cards: used vs paid</h2></div>
+      <div class="cards" id="cards"><p class="empty">Loading your cards…</p></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="a-h">
+    <div class="panel-head"><h2 id="a-h">Log an entry</h2><span class="status" id="status" role="status"></span></div>
+    <form id="form" novalidate>
+      <div class="seg" role="group" aria-label="Entry type">
+        <button type="button" data-kind="spend" aria-pressed="true">I spent</button>
+        <button type="button" data-kind="payment" aria-pressed="false">I paid a card</button>
+        <button type="button" data-kind="income" aria-pressed="false">Money came in</button>
+        <button type="button" data-kind="save" aria-pressed="false">I saved money</button>
+      </div>
+      <label>Date<input id="f-date" type="date" required></label>
+      <label class="f-desc">What<input id="f-desc" type="text" placeholder="Harris Teeter groceries" required></label>
+      <label>Amount ($)<input id="f-amt" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" required></label>
+      <label id="l-acct"><span id="l-acct-t">Paid with</span><select id="f-acct"></select></label>
+      <label id="l-cat">Budget<select id="f-cat"></select></label>
+      <p class="hint" id="hint" aria-live="polite"></p>
+      <button class="primary" type="submit" id="f-submit" style="grid-column:1/-1">Add to ledger</button>
+    </form>
+  </section>
+
+  <section class="panel" aria-labelledby="l-h">
+    <div class="panel-head"><h2 id="l-h">Entries this period</h2><span class="note" id="l-note">Newest first</span></div>
+    <div class="log-wrap"><table>
+      <thead><tr><th>Date</th><th>What</th><th>Type</th><th>Account</th><th>Budget</th><th class="amt">Amount</th><th></th></tr></thead>
+      <tbody id="log"><tr><td colspan="7" class="empty">Entries you log show up here.</td></tr></tbody>
+    </table></div>
+    <details class="close" id="close">
+      <summary>Close this period and start the next one</summary>
+      <div class="close-body">
+        <p>Do this on your next bills paycheck. This period's entries and totals move to Past periods below, and today's cash and card balances become the new starting point.</p>
+        <div class="grid3">
+          <label>New period starts<input id="n-start" type="date"></label>
+          <label>New period ends<input id="n-end" type="date"></label>
+          <label>Save paycheck date<input id="n-next" type="date"></label>
+          <label>Bills paycheck amount ($)<input id="n-pay" type="number" step="0.01" min="0" inputmode="decimal"></label>
+        </div>
+        <span class="eyebrow">Budgets for the new period</span>
+        <div class="bud" id="n-bud"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="primary ghost" type="button" id="n-go">Close period</button>
+          <button class="ghost" type="button" id="n-cancel" hidden>Cancel</button>
+          <span class="status" id="n-status"></span>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel" aria-labelledby="h-h">
+    <div class="panel-head"><h2 id="h-h">Past periods</h2><button class="ghost" type="button" id="csv" hidden>Download all entries (CSV)</button></div>
+    <div class="log-wrap"><table class="hist">
+      <thead><tr><th>Period</th><th class="amt">Budgeted</th><th class="amt">Spent</th><th class="amt">Saved</th><th class="amt">Left over</th><th class="amt">Owed at close</th></tr></thead>
+      <tbody id="hist"><tr><td colspan="6" class="empty">Closed pay periods appear here, with their totals.</td></tr></tbody>
+    </table></div>
+  </section>
+</div>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+/* ---- Fill these two in from Supabase: Project Settings -> API ---- */
+const SUPABASE_URL = "https://xfrcsaadxjslsmoygwcv.supabase.co/rest/v1/";
+const SUPABASE_ANON_KEY = "sb_publishable_Nwpwwf7lD-uEcmoS8tdhGw_u1Wj4tpI";
+/* The anon key is safe to publish: row-level security in schema.sql keeps every row private to your login. */
+
+const ACCTS = {flex:"Chase Freedom Flex", discover:"Discover it Student", amex:"Amex Blue Cash", debit:"Chase debit", savings:"Chase savings", direct:"Straight from paycheck", cash:"From Chase savings"};
+const CARD_USE = {flex:"Groceries & dining", discover:"Bills & subscriptions", amex:"Shopping & everything else"};
+const KIND = {spend:"Spent", payment:"Card payment", income:"Income", save:"Saved"};
+const FIRST_PERIOD = "2026-10-09";
+const $ = id => document.getElementById(id);
+const money = n => (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const round = n => Math.round(n*100)/100;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmt = iso => { if(!iso) return ""; const [y,m,d] = iso.split("-").map(Number); return `${MON[m-1]} ${d}`; };
+const addDays = (iso, n) => { const [y,m,d] = iso.split("-").map(Number); return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10); };
+const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+const pid = t => t.period || FIRST_PERIOD;
+
+let sb = null, session = null, cfg = null, all = [], txns = [], periods = [], kind = "spend", armed = null, closeArmed = false, openHist = null, loading = false;
+
+/* ---------- data layer (Supabase) ---------- */
+function must(res){ if (res.error) throw res.error; return res.data; }
+async function load(){
+  if (!session || loading) return;
+  loading = true;
+  try {
+    const [c, t, p] = await Promise.all([
+      sb.from("config").select("data").maybeSingle(),
+      sb.from("txns").select("*").order("date", {ascending:false}),
+      sb.from("periods").select("*")
+    ]);
+    const cRow = must(c);
+    cfg = cRow ? cRow.data : null;
+    all = must(t).map(r => ({id:r.id, date:r.date, desc:r.description, amount:Number(r.amount), kind:r.kind, account:r.account, category:r.category, pre:r.pre, period:r.period, created:Date.parse(r.created_at)}));
+    periods = must(p).map(r => ({...r.data, id:r.id}));
+    txns = cfg ? all.filter(x => pid(x) === (cfg.period.id || FIRST_PERIOD)) : [];
+    if (!cfg) $("envs").innerHTML = `<p class="empty">No budget found for this login. Run seed.sql in Supabase (see the README), then reload.</p>`;
+    fillSelects(); render();
+  } catch(e){
+    $("status").textContent = "Couldn't load your ledger. Check your connection and reload.";
+  } finally { loading = false; }
+}
+async function addTxn(row){
+  must(await sb.from("txns").insert({date:row.date, description:row.desc, amount:row.amount, kind:row.kind, account:row.account, category:row.category || null, pre:false, period:row.period}));
+}
+
+/* ---------- sign in ---------- */
+function showApp(on){ $("app").hidden = !on; $("auth").hidden = on; }
+$("auth-form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const email = $("a-email").value.trim(), password = $("a-pass").value;
+  if (!email || !password){ $("a-status").textContent = "Enter your email and password."; return; }
+  $("a-go").disabled = true; $("a-status").textContent = "Signing in…";
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  $("a-go").disabled = false;
+  $("a-status").textContent = error ? "That email and password don't match. Try again." : "";
+  if (!error) $("a-pass").value = "";
+});
+$("signout").addEventListener("click", async () => { await sb.auth.signOut(); });
+
+/* ---------- form ---------- */
+$("f-date").value = todayIso();
+function suggest(cat){
+  const m = {food:"flex", trip:"amex", personal:"amex", electric:"discover", internet:"discover", phone:"discover", subs:"discover", rent:"debit"};
+  return m[cat] || "amex";
+}
+function fillSelects(){
+  const a = $("f-acct"), c = $("f-cat");
+  const accts = {payment:["flex","discover","amex"], income:["savings","debit"], save:["direct","cash"]}[kind] || ["flex","discover","amex","debit"];
+  a.innerHTML = accts.map(k => `<option value="${k}">${ACCTS[k]}</option>`).join("");
+  $("l-acct-t").textContent = {payment:"Card paid", income:"Into", save:"Where it came from"}[kind] || "Paid with";
+  const envs = (cfg && cfg.envelopes) || [];
+  c.innerHTML = envs.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("") + `<option value="other">Other</option>`;
+  $("l-cat").hidden = kind !== "spend";
+  $("f-desc").placeholder = {payment:"Discover statement", income:"Finzly paycheck", save:"Oct 23 paycheck to India fund"}[kind] || "Harris Teeter groceries";
+  if (kind === "spend") a.value = suggest(c.value);
+  showHint();
+}
+function showHint(){
+  const msg = {
+    payment:"Card payments come out of checking and lower what you owe.",
+    income:"Log the bills paycheck here. The save paycheck goes under “I saved money”.",
+    save:"“Straight from paycheck” leaves your cash alone. “From Chase savings” moves cash you already had into the fund."
+  }[kind];
+  if (msg){ $("hint").textContent = msg; return; }
+  const want = suggest($("f-cat").value);
+  $("hint").textContent = $("f-acct").value === want ? "" : `Better card for this: ${ACCTS[want]}.`;
+}
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  kind = b.dataset.kind;
+  document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  fillSelects();
+}));
+$("f-cat").addEventListener("change", () => { $("f-acct").value = suggest($("f-cat").value); showHint(); });
+$("f-acct").addEventListener("change", showHint);
+
+/* ---------- math ---------- */
+function compute(){
+  const owed = {...cfg.cards}; let cash = cfg.checking + cfg.savings, saved = 0;
+  const spent = {};
+  for (const t of txns){
+    const a = Number(t.amount)||0;
+    if (t.kind === "spend"){
+      spent[t.category] = (spent[t.category]||0) + a;
+      if (t.pre) continue;
+      if (owed[t.account] !== undefined) owed[t.account] += a; else cash -= a;
+    } else if (t.kind === "save"){ saved += a; if (!t.pre && t.account === "cash") cash -= a; }
+    else if (t.pre) continue;
+    else if (t.kind === "payment"){ owed[t.account] = (owed[t.account]||0) - a; cash -= a; }
+    else if (t.kind === "income"){ cash += a; }
+  }
+  let left = 0, budget = 0, spentTotal = 0;
+  for (const e of cfg.envelopes){ budget += e.budget; left += Math.max(0, e.budget - (spent[e.id]||0)); }
+  for (const k in spent) spentTotal += spent[k];
+  for (const k in owed) owed[k] = round(owed[k]);
+  const owedTotal = round(Object.values(owed).reduce((s,v)=>s+v,0));
+  return {owed, cash: round(cash), spent, left: round(left), owedTotal, extra: round(cash - owedTotal - left), saved: round(saved), budget: round(budget), spentTotal: round(spentTotal)};
+}
+
+/* ---------- render ---------- */
+function render(){
+  const saves = all.filter(t => t.kind === "save");
+  $("fund").textContent = money(round(saves.reduce((s,t)=>s+(Number(t.amount)||0),0)));
+  $("fund-sub").textContent = saves.length ? `${saves.length} deposit${saves.length>1?"s":""} logged across all periods.` : "Log each saved paycheck as “I saved money”.";
+  renderHist();
+  if (!cfg) return;
+  const r = compute();
+  const p = cfg.period || {};
+  $("period").innerHTML = `<span class="pill">Bills paycheck · ${esc(p.label||"")}</span><span class="pill save">Next: ${esc(p.next||"")} → save it all</span>`;
+  $("s-cash").textContent = money(r.cash);
+  $("s-owed").textContent = money(r.owedTotal);
+  $("s-left").textContent = money(r.left);
+  $("s-extra").textContent = money(r.extra);
+  $("s-extra").style.color = r.extra < 0 ? "var(--bad)" : "";
+  $("old-debt").textContent = money(cfg.oldCardDebt||0);
+  $("e-note").textContent = `${money(r.budget)} planned`;
+  $("envs").innerHTML = cfg.envelopes.map(e => {
+    const s = round(r.spent[e.id]||0), pct = e.budget ? s/e.budget : (s>0?2:0);
+    const cls = pct > 1 ? "over" : pct >= .85 ? "near" : "";
+    const fig = pct > 1 ? `${money(s-e.budget)} over` : `${money(s)} of ${money(e.budget)}`;
+    return `<div class="env-row ${cls}"><div class="env-top"><span class="name">${esc(e.name)}</span><span class="fig num">${fig}</span></div><div class="bar"><i style="width:${Math.min(100,pct*100)}%"></i></div></div>`;
+  }).join("") + (r.spent.other ? `<div class="reserve"><span>Unbudgeted (Other)</span><span class="num">${money(round(r.spent.other))}</span></div>` : "");
+  const used = {}, paid = {};
+  for (const t of txns){ if (t.kind==="spend") used[t.account]=(used[t.account]||0)+Number(t.amount); if (t.kind==="payment") paid[t.account]=(paid[t.account]||0)+Number(t.amount); }
+  $("cards").innerHTML = ["flex","discover","amex"].map(k => `<div class="card"><span class="cname">${ACCTS[k]}</span><span class="owed num">${money(r.owed[k]||0)}</span><span class="use">${CARD_USE[k]} · due ${esc((cfg.due||{})[k]||"—")}</span><span class="meta num">used ${money(round(used[k]||0))} · paid ${money(round(paid[k]||0))}</span></div>`).join("")
+    + `<div class="reserve"><span>Chase debit used this period</span><span class="num">${money(round(used.debit||0))}</span></div>`;
+  const rows = [...txns].sort((a,b)=> (b.date||"").localeCompare(a.date||"") || (b.created||0)-(a.created||0));
+  const envName = id => (cfg.envelopes.find(e=>e.id===id)||{}).name || (id==="other"?"Other":"—");
+  $("l-note").textContent = `${p.label||""} · newest first`;
+  $("log").innerHTML = rows.length ? rows.map(t => `<tr>
+    <td class="num">${esc(fmt(t.date))}</td><td>${esc(t.desc||"")}</td>
+    <td><span class="tag ${esc(t.kind)}">${KIND[t.kind]||esc(t.kind)}</span></td>
+    <td>${ACCTS[t.account]||esc(t.account||"")}</td><td>${t.kind==="spend"?esc(envName(t.category)):"—"}</td>
+    <td class="amt num">${t.kind==="income"?"+":""}${money(Number(t.amount)||0)}</td>
+    <td><button class="del${armed===t.id?" arm":""}" data-id="${esc(t.id)}">${armed===t.id?"Confirm delete":"Delete"}</button></td></tr>`).join("")
+    : `<tr><td colspan="7" class="empty">No entries yet this period. Log your first purchase above.</td></tr>`;
+}
+function renderHist(){
+  const rows = [...periods].sort((a,b)=> (b.start||"").localeCompare(a.start||""));
+  if (!rows.length){ $("hist").innerHTML = `<tr><td colspan="6" class="empty">Closed pay periods appear here, with their totals.</td></tr>`; return; }
+  $("hist").innerHTML = rows.map(p => {
+    const open = openHist === p.id;
+    let html = `<tr class="${open?"open":""}" data-pid="${esc(p.id)}" style="cursor:pointer"><td class="lbl">${open?"− ":"+ "}${esc(p.label||p.id)}</td><td class="amt num">${money(p.budgetTotal||0)}</td><td class="amt num">${money(p.spentTotal||0)}</td><td class="amt num">${money(p.saved||0)}</td><td class="amt num">${money(p.extraAtClose||0)}</td><td class="amt num">${money(p.owedAtClose||0)}</td></tr>`;
+    if (open){
+      html += (p.envelopes||[]).map(e => `<tr class="det"><td>${esc(e.name)}</td><td class="amt num">${money(e.budget||0)}</td><td class="amt num">${money(e.spent||0)}</td><td></td><td class="amt num">${money(round((e.budget||0)-(e.spent||0)))}</td><td></td></tr>`).join("");
+      const ents = all.filter(t => pid(t) === p.id).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+      html += `<tr class="det"><td colspan="6">${ents.length} entries: ${ents.map(t => `${esc(fmt(t.date))} ${esc(t.desc||"")} ${money(Number(t.amount)||0)}`).join(" · ")}</td></tr>`;
+    }
+    return html;
+  }).join("");
+}
+$("hist").addEventListener("click", ev => { const tr = ev.target.closest("tr[data-pid]"); if (!tr) return; openHist = openHist === tr.dataset.pid ? null : tr.dataset.pid; renderHist(); });
+
+/* ---------- actions ---------- */
+$("log").addEventListener("click", async ev => {
+  const b = ev.target.closest(".del"); if (!b) return;
+  const id = b.dataset.id;
+  if (armed !== id){ armed = id; render(); return; }
+  armed = null;
+  try { must(await sb.from("txns").delete().eq("id", id)); $("status").textContent = "Entry deleted."; await load(); }
+  catch(e){ $("status").textContent = "Couldn't delete that entry. Try again in a moment."; }
+});
+
+$("form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const amt = parseFloat($("f-amt").value), desc = $("f-desc").value.trim(), date = $("f-date").value;
+  if (!cfg){ $("status").textContent = "Your budget hasn't loaded yet."; return; }
+  if (!date || !desc || !(amt > 0)){ $("status").textContent = "Add a date, what it was, and an amount above $0."; return; }
+  const row = {date, desc: desc.slice(0,200), amount: round(amt), kind, account: $("f-acct").value, period: cfg.period.id || FIRST_PERIOD};
+  if (kind === "spend") row.category = $("f-cat").value;
+  $("f-submit").disabled = true;
+  try { await addTxn(row); $("f-desc").value = ""; $("f-amt").value = ""; $("status").textContent = `Saved: ${desc}, ${money(row.amount)}.`; await load(); }
+  catch(e){ $("status").textContent = "Couldn't save. Check your connection and try again."; }
+  finally { $("f-submit").disabled = false; }
+});
+
+function prefillClose(){
+  if (!cfg) return;
+  const start = addDays(cfg.period.end || todayIso(), 1);
+  if (!$("n-start").value) $("n-start").value = start;
+  if (!$("n-end").value) $("n-end").value = addDays(start, 27);
+  if (!$("n-next").value) $("n-next").value = addDays(start, 14);
+  if (!$("n-pay").value) $("n-pay").value = cfg.paycheck || "";
+  if (!$("n-bud").children.length)
+    $("n-bud").innerHTML = cfg.envelopes.map(e => `<label>${esc(e.name)}<input type="number" step="0.01" min="0" inputmode="decimal" id="nb-${esc(e.id)}" value="${e.budget}"></label>`).join("");
+}
+$("close").addEventListener("toggle", () => { if ($("close").open) prefillClose(); });
+$("n-cancel").addEventListener("click", () => { closeArmed = false; $("n-go").textContent = "Close period"; $("n-cancel").hidden = true; $("n-status").textContent = ""; });
+$("n-go").addEventListener("click", async () => {
+  if (!cfg) return;
+  const start = $("n-start").value, end = $("n-end").value, next = $("n-next").value, pay = parseFloat($("n-pay").value);
+  if (!start || !end || end < start){ $("n-status").textContent = "Pick a start date and an end date after it."; return; }
+  if (start <= (cfg.period.start||"")){ $("n-status").textContent = "The new period has to start after this one."; return; }
+  if (!closeArmed){ closeArmed = true; $("n-go").textContent = `Yes, close ${cfg.period.label}`; $("n-cancel").hidden = false; $("n-status").textContent = "This can't be undone from the page."; return; }
+  closeArmed = false; $("n-cancel").hidden = true; $("n-go").disabled = true; $("n-status").textContent = "Closing…";
+  const r = compute(), oldId = cfg.period.id || FIRST_PERIOD;
+  const envelopes = cfg.envelopes.map(e => { const v = parseFloat(($("nb-"+e.id)||{}).value); return {...e, budget: round(isFinite(v) && v >= 0 ? v : e.budget)}; });
+  const snapshot = {
+    label: cfg.period.label, start: cfg.period.start, end: cfg.period.end, closedAt: Date.now(),
+    envelopes: cfg.envelopes.map(e => ({id:e.id, name:e.name, budget:e.budget, spent: round(r.spent[e.id]||0)})),
+    budgetTotal: r.budget, spentTotal: r.spentTotal, saved: r.saved, cashAtClose: r.cash, owedAtClose: r.owedTotal, extraAtClose: r.extra, cardsAtClose: r.owed
+  };
+  const nextCfg = {
+    asOf: start, checking: r.cash, savings: 0, cards: r.owed, due: cfg.due || {}, oldCardDebt: r.owedTotal,
+    paycheck: isFinite(pay) ? round(pay) : (cfg.paycheck || 0), envelopes,
+    period: {id: start, start, end, label: `${fmt(start)} – ${fmt(end)}`, next: next ? fmt(next) : ""}
+  };
+  try {
+    must(await sb.from("periods").upsert({user_id: session.user.id, id: oldId, data: snapshot}));
+    must(await sb.from("config").upsert({user_id: session.user.id, data: nextCfg, updated_at: new Date().toISOString()}));
+    if (isFinite(pay) && pay > 0) await addTxn({date: start, desc: "Bills paycheck", amount: round(pay), kind: "income", account: "savings", period: start});
+    $("n-status").textContent = `Closed ${snapshot.label}. New period started.`;
+    $("close").open = false; ["n-start","n-end","n-next","n-pay"].forEach(id => $(id).value = ""); $("n-bud").innerHTML = "";
+    await load();
+  } catch(e){ $("n-status").textContent = "Couldn't close the period. Reload and check Past periods before trying again."; }
+  finally { $("n-go").disabled = false; $("n-go").textContent = "Close period"; }
+});
+
+$("csv").hidden = false;
+$("csv").addEventListener("click", () => {
+  const head = "period,date,description,type,account,budget,amount";
+  const q = s => `"${String(s ?? "").replace(/"/g,'""')}"`;
+  const lines = [...all].sort((a,b)=>(a.date||"").localeCompare(b.date||"")).map(t => [pid(t), t.date, t.desc, KIND[t.kind]||t.kind, ACCTS[t.account]||t.account, t.category||"", (Number(t.amount)||0).toFixed(2)].map(q).join(","));
+  const url = URL.createObjectURL(new Blob([[head, ...lines].join("\n")], {type:"text/csv"}));
+  const a = document.createElement("a"); a.href = url; a.download = `paycheck-ledger-${todayIso()}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+/* ---------- start ---------- */
+fillSelects();
+(async () => {
+  if (!window.supabase || SUPABASE_URL.includes("YOUR-PROJECT-REF")){
+    $("a-status").textContent = "Setup isn't finished: add your Supabase URL and anon key near the bottom of index.html.";
+    $("a-go").disabled = true; showApp(false); return;
+  }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {auth:{persistSession:true, autoRefreshToken:true}});
+  sb.auth.onAuthStateChange((_event, s) => {
+    const was = !!session; session = s; showApp(!!s);
+    if (s && !was) load();
+    if (!s){ cfg = null; all = []; txns = []; periods = []; }
+  });
+  const { data } = await sb.auth.getSession();
+  session = data.session; showApp(!!session);
+  if (session) load();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && session) load(); });
+})();
+</script>
+</body>
+</html>
